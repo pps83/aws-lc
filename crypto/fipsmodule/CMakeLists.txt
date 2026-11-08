@@ -789,7 +789,11 @@ elseif(FIPS_SHARED)
 
 else()
   set(BCM_ASM_OBJECTS "")
-  if ((ARCH STREQUAL "aarch64" OR S2N_BIGNUM_WINDOWS_X86_64) AND CMAKE_GENERATOR MATCHES "Visual Studio")
+  if (S2N_BIGNUM_YASM)
+    # $<TARGET_OBJECTS:fipsmodule> would not carry objects of sources it does not compile itself, so the crypto
+    # library takes the YASM objects directly (crypto/CMakeLists.txt)
+    set(S2N_BIGNUM_YASM_SOURCES ${BCM_ASM_SOURCES} PARENT_SCOPE)
+  elseif ((ARCH STREQUAL "aarch64" OR S2N_BIGNUM_WINDOWS_X86_64) AND CMAKE_GENERATOR MATCHES "Visual Studio")
     msbuild_aarch64_asm(TARGET fipsmodule ASM_FILES ${BCM_ASM_SOURCES} OUTPUT_OBJECTS BCM_ASM_OBJECTS)
   endif()
 

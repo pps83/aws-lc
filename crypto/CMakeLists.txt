@@ -58,6 +58,33 @@ function(msbuild_aarch64_asm)
   set(${MSBUILD_AARCH64_ASM_OUTPUT_OBJECTS} ${ASSEMBLED_OBJECTS} PARENT_SCOPE)
 endfunction()
 
+# Function to assemble the s2n-bignum .S files with YASM (S2N_BIGNUM_YASM_COMMAND), for Windows x86_64 builds whose
+# compiler cannot (MSVC)
+function(yasm_s2n_bignum)
+  cmake_parse_arguments(YASM_S2N_BIGNUM "" "TARGET;OUTPUT_OBJECTS" "ASM_FILES" ${ARGV})
+
+  set(OBJ_DIR "${CMAKE_CURRENT_BINARY_DIR}/${YASM_S2N_BIGNUM_TARGET}.dir/$<CONFIG>")
+  list(FILTER YASM_S2N_BIGNUM_ASM_FILES INCLUDE REGEX "/s2n-bignum/.*\\.S$")
+  set(ASSEMBLED_OBJECTS "")
+
+  foreach(ASM_FILE ${YASM_S2N_BIGNUM_ASM_FILES})
+    get_filename_component(ASM_NAME ${ASM_FILE} NAME_WE)
+    set(OBJ_FILE "${OBJ_DIR}/${ASM_NAME}.obj")
+
+    add_custom_command(
+      OUTPUT ${OBJ_FILE}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${OBJ_DIR}
+      COMMAND ${S2N_BIGNUM_YASM_COMMAND} -o ${OBJ_FILE} ${ASM_FILE}
+      DEPENDS ${ASM_FILE}
+      COMMENT "Assembling ${ASM_FILE} with YASM"
+    )
+    set_source_files_properties(${OBJ_FILE} PROPERTIES EXTERNAL_OBJECT TRUE)
+    list(APPEND ASSEMBLED_OBJECTS ${OBJ_FILE})
+  endforeach()
+
+  set(${YASM_S2N_BIGNUM_OUTPUT_OBJECTS} ${ASSEMBLED_OBJECTS} PARENT_SCOPE)
+endfunction()
+
 if(NOT OPENSSL_NO_ASM)
   if(NOT WIN32)
     if(ARCH STREQUAL "aarch64")
@@ -148,6 +175,35 @@ if(NOT OPENSSL_NO_ASM)
         enable_language(ASM)
         set(S2N_BIGNUM_WINDOWS_X86_64 ON)
         add_definitions(-DOPENSSL_S2N_BIGNUM_WINDOWS_X86_64)
+      elseif(ARCH STREQUAL "x86_64" AND NOT MY_ASSEMBLER_IS_TOO_OLD_FOR_ADX_AVX2)
+        # Other compilers (MSVC): a YASM whose GAS parser takes the sources
+        # through the compiler's preprocessor can assemble them instead.
+        # Whether the YASM found can is learnt by assembling one of them.
+        find_program(YASM_EXECUTABLE yasm)
+        if(YASM_EXECUTABLE)
+          # YASM runs the preprocessor as plain cl.exe
+          get_filename_component(C_COMPILER_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
+          set(S2N_BIGNUM_YASM_COMMAND
+              ${CMAKE_COMMAND} -E env "PATH=${C_COMPILER_DIR}"
+              ${YASM_EXECUTABLE} -p gas -r cpp -f win64
+              -I${AWSLC_BINARY_DIR}/symbol_prefix_include
+              -I${AWSLC_SOURCE_DIR}/include
+              -I${AWSLC_SOURCE_DIR}/third_party/s2n-bignum/s2n-bignum-imported/include)
+          execute_process(
+            COMMAND ${S2N_BIGNUM_YASM_COMMAND}
+                    -o ${CMAKE_CURRENT_BINARY_DIR}/s2n_bignum_yasm_probe.obj
+                    ${AWSLC_SOURCE_DIR}/third_party/s2n-bignum/s2n-bignum-imported/x86_att/curve25519/curve25519_x25519.S
+            RESULT_VARIABLE S2N_BIGNUM_YASM_PROBE
+            OUTPUT_QUIET ERROR_QUIET)
+          if(S2N_BIGNUM_YASM_PROBE EQUAL 0)
+            message(STATUS "s2n-bignum is assembled with ${YASM_EXECUTABLE}")
+            set(S2N_BIGNUM_WINDOWS_X86_64 ON)
+            set(S2N_BIGNUM_YASM ON)
+            add_definitions(-DOPENSSL_S2N_BIGNUM_WINDOWS_X86_64)
+          else()
+            message(STATUS "${YASM_EXECUTABLE} cannot assemble s2n-bignum, which is left out")
+          endif()
+        endif()
       endif()
 
       # On Windows, we use the NASM output.
@@ -241,6 +297,11 @@ else()
 
 endif()
 add_subdirectory(fipsmodule)
+
+set(S2N_BIGNUM_YASM_OBJECTS "")
+if(S2N_BIGNUM_YASM)
+  yasm_s2n_bignum(TARGET crypto ASM_FILES ${S2N_BIGNUM_YASM_SOURCES} OUTPUT_OBJECTS S2N_BIGNUM_YASM_OBJECTS)
+endif()
 
 if(FIPS_DELOCATE OR FIPS_SHARED)
   SET_SOURCE_FILES_PROPERTIES(fipsmodule/${BCM_NAME} PROPERTIES EXTERNAL_OBJECT true)
@@ -342,7 +403,8 @@ else()
 endif()
 
 set(CRYPTO_ARCH_OBJECTS "")
-if ((ARCH STREQUAL "aarch64" OR S2N_BIGNUM_WINDOWS_X86_64) AND CMAKE_GENERATOR MATCHES "Visual Studio")
+if ((ARCH STREQUAL "aarch64" OR (S2N_BIGNUM_WINDOWS_X86_64 AND NOT S2N_BIGNUM_YASM)) AND
+    CMAKE_GENERATOR MATCHES "Visual Studio")
   msbuild_aarch64_asm(TARGET crypto_objects ASM_FILES ${CRYPTO_ARCH_SOURCES} OUTPUT_OBJECTS CRYPTO_ARCH_OBJECTS)
 endif()
 
@@ -633,6 +695,10 @@ function(build_libcrypto)
 
   if(NOT DISABLE_CPU_JITTER_ENTROPY)
     target_sources(${arg_NAME} PRIVATE $<TARGET_OBJECTS:jitterentropy>)
+  endif()
+
+  if(S2N_BIGNUM_YASM_OBJECTS)
+    target_sources(${arg_NAME} PRIVATE ${S2N_BIGNUM_YASM_OBJECTS})
   endif()
 
   if(FIPS_DELOCATE OR FIPS_SHARED)
