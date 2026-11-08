@@ -28,9 +28,14 @@ typedef signed char fiat_p256_int1;
 #  define FIAT_P256_FIAT_INLINE
 #endif
 
+#if defined(_MSC_VER) && !defined(__clang__)
+// MSVC has no 128-bit integer type: the three helpers below use its intrinsics instead.
+#include <intrin.h>
+#else
 // Pedantic warnings can be disabled by adding prefix __extension__.
 FIAT_P256_FIAT_EXTENSION typedef __int128_t fiat_p256_int128;
 FIAT_P256_FIAT_EXTENSION typedef __uint128_t fiat_p256_uint128;
+#endif
 
 /* The type fiat_p256_montgomery_domain_field_element is a field element in the Montgomery domain. */
 /* Bounds: [[0x0 ~> 0xffffffffffffffff], [0x0 ~> 0xffffffffffffffff], [0x0 ~> 0xffffffffffffffff], [0x0 ~> 0xffffffffffffffff]] */
@@ -70,6 +75,9 @@ static __inline__ uint64_t fiat_p256_value_barrier_u64(uint64_t a) {
  *   out2: [0x0 ~> 0x1]
  */
 static FIAT_P256_FIAT_INLINE void fiat_p256_addcarryx_u64(uint64_t* out1, fiat_p256_uint1* out2, fiat_p256_uint1 arg1, uint64_t arg2, uint64_t arg3) {
+#if defined(_MSC_VER) && !defined(__clang__)
+  *out2 = _addcarry_u64(arg1, arg2, arg3, out1);
+#else
   fiat_p256_uint128 x1;
   uint64_t x2;
   fiat_p256_uint1 x3;
@@ -78,6 +86,7 @@ static FIAT_P256_FIAT_INLINE void fiat_p256_addcarryx_u64(uint64_t* out1, fiat_p
   x3 = (fiat_p256_uint1)(x1 >> 64);
   *out1 = x2;
   *out2 = x3;
+#endif
 }
 
 /*
@@ -96,6 +105,9 @@ static FIAT_P256_FIAT_INLINE void fiat_p256_addcarryx_u64(uint64_t* out1, fiat_p
  *   out2: [0x0 ~> 0x1]
  */
 static FIAT_P256_FIAT_INLINE void fiat_p256_subborrowx_u64(uint64_t* out1, fiat_p256_uint1* out2, fiat_p256_uint1 arg1, uint64_t arg2, uint64_t arg3) {
+#if defined(_MSC_VER) && !defined(__clang__)
+  *out2 = _subborrow_u64(arg1, arg2, arg3, out1);
+#else
   fiat_p256_int128 x1;
   fiat_p256_int1 x2;
   uint64_t x3;
@@ -104,6 +116,7 @@ static FIAT_P256_FIAT_INLINE void fiat_p256_subborrowx_u64(uint64_t* out1, fiat_
   x3 = (uint64_t)(x1 & UINT64_C(0xffffffffffffffff));
   *out1 = x3;
   *out2 = (fiat_p256_uint1)(0x0 - x2);
+#endif
 }
 
 /*
@@ -121,6 +134,9 @@ static FIAT_P256_FIAT_INLINE void fiat_p256_subborrowx_u64(uint64_t* out1, fiat_
  *   out2: [0x0 ~> 0xffffffffffffffff]
  */
 static FIAT_P256_FIAT_INLINE void fiat_p256_mulx_u64(uint64_t* out1, uint64_t* out2, uint64_t arg1, uint64_t arg2) {
+#if defined(_MSC_VER) && !defined(__clang__)
+  *out1 = _umul128(arg1, arg2, out2);
+#else
   fiat_p256_uint128 x1;
   uint64_t x2;
   uint64_t x3;
@@ -129,6 +145,7 @@ static FIAT_P256_FIAT_INLINE void fiat_p256_mulx_u64(uint64_t* out1, uint64_t* o
   x3 = (uint64_t)(x1 >> 64);
   *out1 = x2;
   *out2 = x3;
+#endif
 }
 
 /*

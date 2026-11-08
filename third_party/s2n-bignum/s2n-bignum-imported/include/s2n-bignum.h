@@ -1103,7 +1103,7 @@ extern void mldsa_reduce(int32_t a[S2N_BIGNUM_STATIC 256]);
 
 // Use hint to correct high bits of decomposition for ML-DSA (parameter sets 65/87)
 // The x86 variant operates in place on a[256]; the ARM variant writes b[256]
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(_M_X64)
 // Inputs a[256], h[256] (signed 32-bit words); output a[256] (signed 32-bit words, in place)
 extern void mldsa_poly_use_hint_32(int32_t a[S2N_BIGNUM_STATIC 256], const int32_t h[S2N_BIGNUM_STATIC 256]);
 #else
@@ -1113,7 +1113,7 @@ extern void mldsa_poly_use_hint_32(int32_t b[S2N_BIGNUM_STATIC 256], const int32
 
 // Use hint to correct high bits of decomposition for ML-DSA (parameter set 44)
 // The x86 variant operates in place on a[256]; the ARM variant writes b[256]
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(_M_X64)
 // Inputs a[256], h[256] (signed 32-bit words); output a[256] (signed 32-bit words, in place)
 extern void mldsa_poly_use_hint_88(int32_t a[S2N_BIGNUM_STATIC 256], const int32_t h[S2N_BIGNUM_STATIC 256]);
 #else
@@ -1302,7 +1302,7 @@ extern void sha3_keccak2_f1600_alt(uint64_t a[S2N_BIGNUM_STATIC 50],const uint64
 // Batched 4-way Keccak-f1600 permutation for SHA3
 // Inputs a[100], rc[24]; output a[100]
 extern void sha3_keccak4_f1600(uint64_t a[S2N_BIGNUM_STATIC 100],const uint64_t rc[S2N_BIGNUM_STATIC 24]);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(_M_X64)
 extern void sha3_keccak4_f1600_alt(uint64_t a[S2N_BIGNUM_STATIC 100],const uint64_t rc[S2N_BIGNUM_STATIC 24],const uint64_t rho8[S2N_BIGNUM_STATIC 4],const uint64_t rho56[S2N_BIGNUM_STATIC 4]);
 #else
 extern void sha3_keccak4_f1600_alt(uint64_t a[S2N_BIGNUM_STATIC 100],const uint64_t rc[S2N_BIGNUM_STATIC 24]);

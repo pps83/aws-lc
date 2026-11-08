@@ -21,7 +21,9 @@
 #include "./internal.h"
 #include "ec_nistp.h"
 
-#if defined(BORINGSSL_HAS_UINT128)
+// The limbs follow ec_nistp's: 64-bit ones also come with s2n-bignum on
+// compilers without |uint128_t| (MSVC), where p256_64.h uses intrinsics.
+#if defined(EC_NISTP_USE_64BIT_LIMB)
 #define BORINGSSL_NISTP256_64BIT 1
 #include "../../../third_party/fiat/p256_64.h"
 #else
